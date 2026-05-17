@@ -30,6 +30,12 @@
             50% { color: #ff0000; text-shadow: 0 0 20px #ff0000; }
         }
 
+        @keyframes database-scan {
+            0% { background: rgba(0, 255, 0, 0); }
+            50% { background: rgba(0, 255, 0, 0.1); }
+            100% { background: rgba(0, 255, 0, 0); }
+        }
+
         body {
             background: #0a0e27;
             color: #00ff00;
@@ -211,6 +217,69 @@
             border-left-color: #ffff00;
         }
 
+        .database-status {
+            grid-column: 1 / -1;
+        }
+
+        .database-item {
+            background: rgba(0, 100, 0, 0.3);
+            border: 1px solid #00ff00;
+            padding: 10px;
+            margin: 8px 0;
+            border-radius: 3px;
+            font-size: 0.9em;
+        }
+
+        .database-item.loading {
+            animation: database-scan 1.5s ease-in-out infinite;
+        }
+
+        .database-item.loaded {
+            border-color: #00ff00;
+            background: rgba(0, 200, 0, 0.1);
+        }
+
+        .database-item.error {
+            border-color: #ff6600;
+            background: rgba(255, 100, 0, 0.1);
+        }
+
+        .db-status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .db-status-loading {
+            background: #ffff00;
+            animation: pulse 0.8s infinite;
+        }
+
+        .db-status-success {
+            background: #00ff00;
+        }
+
+        .db-status-error {
+            background: #ff6600;
+        }
+
+        .critical-warning {
+            grid-column: 1 / -1;
+            background: rgba(255, 0, 0, 0.2);
+            border: 3px solid #ff0000;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            animation: pulse-threat 0.7s infinite;
+        }
+
+        .critical-warning h3 {
+            color: #ff0000;
+            margin-bottom: 10px;
+        }
+
         .loading {
             text-align: center;
             font-size: 1.2em;
@@ -276,6 +345,15 @@
             border-radius: 3px;
             font-size: 0.9em;
         }
+
+        .threat-found {
+            background: rgba(255, 0, 0, 0.15);
+            border-left: 3px solid #ff0000;
+            padding: 10px;
+            margin: 8px 0;
+            border-radius: 3px;
+            color: #ff4444;
+        }
     </style>
 </head>
 <body>
@@ -284,8 +362,10 @@
     <div class="container">
         <div class="header">
             <h1>⚔️ IP LOCATION DETECTOR</h1>
-            <p>> INITIALIZING NETWORK RECONNAISSANCE PROTOCOL...</p>
+            <p>> INITIALIZING NETWORK RECONNAISSANCE PROTOCOL WITH THREAT DATABASE SCANNING...</p>
         </div>
+
+        <div id="criticalWarning"></div>
 
         <div class="main-grid">
             <div class="panel">
@@ -310,6 +390,15 @@
                 <div id="map"></div>
             </div>
 
+            <div class="panel database-status">
+                <h2>🔍 THREAT DATABASE STATUS</h2>
+                <div id="databaseStatus">
+                    <div class="loading">
+                        <div class="spinner"></div> Loading threat databases...
+                    </div>
+                </div>
+            </div>
+
             <div class="panel anomalies">
                 <h2>⚠️ ANOMALY DETECTION</h2>
                 <div id="anomalies">
@@ -322,7 +411,7 @@
 
         <div class="footer">
             > SYSTEM READY | Last Update: <span id="timestamp"></span><br>
-            🔒 Privacy Notice: This tool analyzes publicly available IP information only.
+            🔒 Privacy Notice: This tool analyzes publicly available IP information only. No personal data is stored.
         </div>
     </div>
 
@@ -332,6 +421,11 @@
             constructor() {
                 this.ipData = null;
                 this.map = null;
+                this.threatDatabases = {
+                    adguard: { ips: new Set(), loaded: false, url: 'https://cors.sh/https://raw.githubusercontent.com/AdguardTeam/AdGuardSDNSFilter/master/Filters/filter.txt' },
+                    ublock: { ips: new Set(), loaded: false, url: 'https://cors.sh/https://raw.githubusercontent.com/uBlockOrigin/uAssets/master/filters/malware.txt' },
+                    ipsum: { ips: new Set(), loaded: false, url: 'https://cors.sh/https://raw.githubusercontent.com/stamparm/ipsum/master/ipsum.txt' }
+                };
                 this.init();
             }
 
@@ -339,6 +433,7 @@
                 this.createMatrixBackground();
                 this.fetchIPData();
                 this.initMap();
+                this.loadThreatDatabases();
                 this.updateTimestamp();
                 setInterval(() => this.updateTimestamp(), 1000);
             }
@@ -371,6 +466,7 @@
                     this.displayLocationInfo();
                     this.updateMap();
                     this.analyzeAnomalies();
+                    await this.checkThreatDatabases();
                 } catch (error) {
                     document.getElementById('ipInfo').innerHTML = `
                         <div class="error-message">
@@ -467,31 +563,32 @@
                 const threats = [];
                 const org = (this.ipData.org || '').toUpperCase();
 
-                // Datacenter check
                 if (/^(AMAZON|AWS|GOOGLE|MICROSOFT|AZURE|DIGITALOCEAN|LINODE|VULTR)/i.test(org)) {
                     threats.push('datacenter');
                 }
 
-                // Known malicious hosting providers
                 if (/BULLETPROOF|HOSTING|VPS|PROXY|ANONYMIZED|MAXMIND|TEAM CYMRU/i.test(org)) {
                     threats.push('suspicious_provider');
                 }
 
-                // High-risk countries
                 const riskCountries = ['KP', 'IR', 'SY', 'CU', 'SD'];
                 if (riskCountries.includes(this.ipData.country)) {
                     threats.push('high_risk_country');
                 }
 
-                // ASN-based risk (if available and suspicious)
                 if (this.ipData.asn && parseInt(this.ipData.asn) < 1000) {
                     threats.push('legacy_asn');
+                }
+
+                // Check threat databases
+                if (this.isIPInThreatDatabase()) {
+                    threats.push('database_match');
                 }
 
                 if (threats.length >= 3) {
                     return {
                         level: 'CRITICAL',
-                        message: '⚠️ Multiple threat indicators detected. Network appears suspicious.'
+                        message: '🚨 CRITICAL: Multiple threat indicators detected. Network appears highly suspicious.'
                     };
                 } else if (threats.length >= 2) {
                     return {
@@ -508,6 +605,109 @@
                     level: 'SAFE',
                     message: '✓ IP appears normal. No significant threats detected.'
                 };
+            }
+
+            isIPInThreatDatabase() {
+                const ip = this.ipData.ip;
+                for (const db of Object.values(this.threatDatabases)) {
+                    if (db.ips.has(ip)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            async loadThreatDatabases() {
+                const statusDiv = document.getElementById('databaseStatus');
+                let html = '';
+
+                for (const [name, db] of Object.entries(this.threatDatabases)) {
+                    html += `<div class="database-item loading" id="db-${name}">
+                        <span class="db-status-indicator db-status-loading"></span>
+                        <span>${name.toUpperCase()}</span>: Loading...
+                    </div>`;
+                }
+                statusDiv.innerHTML = html;
+
+                for (const [name, db] of Object.entries(this.threatDatabases)) {
+                    await this.fetchThreatDatabase(name, db);
+                }
+            }
+
+            async fetchThreatDatabase(name, db) {
+                try {
+                    const response = await fetch(db.url, { timeout: 10000 });
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                    const text = await response.text();
+                    const lines = text.split('\n');
+                    let ipCount = 0;
+
+                    for (const line of lines) {
+                        const trimmed = line.trim();
+                        if (!trimmed || trimmed.startsWith('!') || trimmed.startsWith('#')) continue;
+
+                        const ip = trimmed.split(/[|\s]/)[0];
+                        if (this.isValidIP(ip)) {
+                            db.ips.add(ip);
+                            ipCount++;
+                        }
+                    }
+
+                    db.loaded = true;
+                    this.updateDatabaseStatus(name, true, ipCount);
+
+                    if (this.ipData) {
+                        await this.checkThreatDatabases();
+                    }
+                } catch (error) {
+                    this.updateDatabaseStatus(name, false, 0, error.message);
+                }
+            }
+
+            updateDatabaseStatus(name, success, count, error = null) {
+                const element = document.getElementById(`db-${name}`);
+                if (!element) return;
+
+                element.className = `database-item ${success ? 'loaded' : 'error'}`;
+                const status = success
+                    ? `<span class="db-status-indicator db-status-success"></span>LOADED (${count} IPs)`
+                    : `<span class="db-status-indicator db-status-error"></span>ERROR: ${error || 'Unknown'}`;
+
+                element.innerHTML = `${status} - ${name.toUpperCase()}`;
+            }
+
+            isValidIP(str) {
+                const ipv4 = /^(\d{1,3}\.){3}\d{1,3}$/.test(str);
+                const ipv6 = /^[0-9a-fA-F:]+$/.test(str);
+                return ipv4 || ipv6;
+            }
+
+            async checkThreatDatabases() {
+                if (!this.ipData) return;
+
+                const ip = this.ipData.ip;
+                let matchedDatabases = [];
+
+                for (const [name, db] of Object.entries(this.threatDatabases)) {
+                    if (db.ips.has(ip)) {
+                        matchedDatabases.push(name.toUpperCase());
+                    }
+                }
+
+                if (matchedDatabases.length > 0) {
+                    const warning = `
+                        <div class="critical-warning">
+                            <h3>🚨 CRITICAL THREAT DETECTED!</h3>
+                            <p>Your IP has been flagged in the following threat databases:</p>
+                            <ul style="margin-left: 20px; margin-top: 10px;">
+                                ${matchedDatabases.map(db => `<li>${db} Threat Database</li>`).join('')}
+                            </ul>
+                            <p style="margin-top: 10px; font-size: 0.9em;">⚠️ This IP is known to be associated with malicious activity or compromised systems.</p>
+                        </div>
+                    `;
+                    document.getElementById('criticalWarning').innerHTML = warning;
+                }
             }
 
             analyzeAnomalies() {
@@ -547,14 +747,6 @@
                     anomalies.push({
                         type: 'warning',
                         message: 'Potential proxy or anonymization service detected.'
-                    });
-                }
-
-                if (!/RESIDENTIAL|COMCAST|VERIZON|AT&T|CHARTER|COX/i.test(org) && !(/AMAZON|GOOGLE|MICROSOFT/i.test(org))) {
-                    // Unknown ISP type
-                    anomalies.push({
-                        type: 'warning',
-                        message: 'ISP classification unknown. Consider verifying IP legitimacy.'
                     });
                 }
 
@@ -611,7 +803,6 @@
             }
         }
 
-        // Initialize the detector when page loads
         window.addEventListener('load', () => {
             new IPDetector();
         });
