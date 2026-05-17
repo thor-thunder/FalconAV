@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔍 IP Location Detector - Matrix Style</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        @keyframes scan {
+            0% { text-shadow: 0 0 10px #00ff00, 0 0 20px #00ff00; }
+            50% { text-shadow: 0 0 20px #00ff00, 0 0 30px #00ff00, 0 0 40px #00ff00; }
+            100% { text-shadow: 0 0 10px #00ff00, 0 0 20px #00ff00; }
+        }
+
+        @keyframes matrix-fall {
+            0% { transform: translateY(-100%); opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { transform: translateY(100vh); opacity: 0; }
+        }
+
+        @keyframes pulse-threat {
+            0%, 100% { color: #00ff00; text-shadow: 0 0 10px #00ff00; }
+            50% { color: #ff0000; text-shadow: 0 0 20px #ff0000; }
+        }
+
+        @keyframes database-scan {
+            0% { background: rgba(0, 255, 0, 0); }
+            50% { background: rgba(0, 255, 0, 0.1); }
+            100% { background: rgba(0, 255, 0, 0); }
+        }
+
+        body {
+            background: #0a0e27;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        .matrix-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            overflow: hidden;
+            opacity: 0.1;
+        }
+
+        .matrix-char {
+            position: absolute;
+            color: #00ff00;
+            font-size: 20px;
+            font-weight: bold;
+            animation: matrix-fall linear infinite;
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 3px solid #00ff00;
+            padding-bottom: 20px;
+            animation: scan 2s infinite;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            letter-spacing: 2px;
+        }
+
+        .header p {
+            font-size: 0.9em;
+            color: #00cc00;
+            opacity: 0.8;
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .panel {
+            border: 2px solid #00ff00;
+            background: rgba(0, 20, 0, 0.5);
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .panel h2 {
+            font-size: 1.2em;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #00ff00;
+            padding-bottom: 10px;
+            letter-spacing: 1px;
+        }
+
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 12px 0;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(0, 255, 0, 0.2);
+        }
+
+        .label {
+            font-weight: bold;
+            color: #00dd00;
+        }
+
+        .value {
+            text-align: right;
+            word-break: break-all;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 1s infinite;
+        }
+
+        .status-safe {
+            background: #00ff00;
+            box-shadow: 0 0 10px #00ff00;
+        }
+
+        .status-warning {
+            background: #ffff00;
+            box-shadow: 0 0 10px #ffff00;
+            animation: pulse-threat 1s infinite;
+        }
+
+        .status-danger {
+            background: #ff0000;
+            box-shadow: 0 0 10px #ff0000;
+            animation: pulse-threat 1s infinite;
+        }
+
+        .threat-level {
+            font-size: 1.1em;
+            margin-top: 15px;
+            padding: 10px;
+            border: 2px solid #00ff00;
+            text-align: center;
+            border-radius: 3px;
+        }
+
+        .threat-level.safe {
+            border-color: #00ff00;
+            color: #00ff00;
+        }
+
+        .threat-level.warning {
+            border-color: #ffff00;
+            color: #ffff00;
+        }
+
+        .threat-level.danger {
+            border-color: #ff0000;
+            color: #ff0000;
+            animation: pulse-threat 0.5s infinite;
+        }
+
+        .map-container {
+            grid-column: 1 / -1;
+            border: 2px solid #00ff00;
+            background: rgba(0, 20, 0, 0.5);
+            border-radius: 5px;
+            overflow: hidden;
+            height: 400px;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.1);
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+            filter: hue-rotate(120deg) saturate(2);
+        }
+
+        .anomalies {
+            grid-column: 1 / -1;
+        }
+
+        .anomaly-item {
+            background: rgba(255, 0, 0, 0.1);
+            border-left: 3px solid #ff0000;
+            padding: 10px;
+            margin: 8px 0;
+            border-radius: 3px;
+        }
+
+        .anomaly-item.warning {
+            background: rgba(255, 255, 0, 0.1);
+            border-left-color: #ffff00;
+        }
+
+        .database-status {
+            grid-column: 1 / -1;
+        }
+
+        .database-item {
+            background: rgba(0, 100, 0, 0.3);
+            border: 1px solid #00ff00;
+            padding: 10px;
+            margin: 8px 0;
+            border-radius: 3px;
+            font-size: 0.9em;
+        }
+
+        .database-item.loading {
+            animation: database-scan 1.5s ease-in-out infinite;
+        }
+
+        .database-item.loaded {
+            border-color: #00ff00;
+            background: rgba(0, 200, 0, 0.1);
+        }
+
+        .database-item.error {
+            border-color: #ff6600;
+            background: rgba(255, 100, 0, 0.1);
+        }
+
+        .db-status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .db-status-loading {
+            background: #ffff00;
+            animation: pulse 0.8s infinite;
+        }
+
+        .db-status-success {
+            background: #00ff00;
+        }
+
+        .db-status-error {
+            background: #ff6600;
+        }
+
+        .critical-warning {
+            grid-column: 1 / -1;
+            background: rgba(255, 0, 0, 0.2);
+            border: 3px solid #ff0000;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            animation: pulse-threat 0.7s infinite;
+        }
+
+        .critical-warning h3 {
+            color: #ff0000;
+            margin-bottom: 10px;
+        }
+
+        .loading {
+            text-align: center;
+            font-size: 1.2em;
+            animation: scan 1s infinite;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #00ff00;
+            border-top: 2px solid transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 2px solid #00ff00;
+            font-size: 0.8em;
+            color: #00aa00;
+        }
+
+        @media (max-width: 768px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .header h1 {
+                font-size: 1.8em;
+            }
+
+            .map-container {
+                height: 300px;
+            }
+        }
+
+        .error-message {
+            color: #ff0000;
+            background: rgba(255, 0, 0, 0.1);
+            border: 2px solid #ff0000;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+
+        .scan-result {
+            margin-top: 15px;
+            padding: 10px;
+            background: rgba(0, 255, 0, 0.05);
+            border-radius: 3px;
+            font-size: 0.9em;
+        }
+
+        .threat-found {
+            background: rgba(255, 0, 0, 0.15);
+            border-left: 3px solid #ff0000;
+            padding: 10px;
+            margin: 8px 0;
+            border-radius: 3px;
+            color: #ff4444;
+        }
+    </style>
+</head>
+<body>
+    <div class="matrix-bg" id="matrixBg"></div>
+
+    <div class="container">
+        <div class="header">
+            <h1>⚔️ IP LOCATION DETECTOR</h1>
+            <p>> INITIALIZING NETWORK RECONNAISSANCE PROTOCOL WITH THREAT DATABASE SCANNING...</p>
+        </div>
+
+        <div id="criticalWarning"></div>
+
+        <div class="main-grid">
+            <div class="panel">
+                <h2>📡 IP INFORMATION</h2>
+                <div id="ipInfo">
+                    <div class="loading">
+                        <div class="spinner"></div> Scanning...
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h2>🌍 LOCATION DATA</h2>
+                <div id="locationInfo">
+                    <div class="loading">
+                        <div class="spinner"></div> Triangulating...
+                    </div>
+                </div>
+            </div>
+
+            <div class="map-container">
+                <div id="map"></div>
+            </div>
+
+            <div class="panel database-status">
+                <h2>🔍 THREAT DATABASE STATUS</h2>
+                <div id="databaseStatus">
+                    <div class="loading">
+                        <div class="spinner"></div> Loading threat databases...
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel anomalies">
+                <h2>⚠️ ANOMALY DETECTION</h2>
+                <div id="anomalies">
+                    <div class="loading">
+                        <div class="spinner"></div> Analyzing...
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            > SYSTEM READY | Last Update: <span id="timestamp"></span><br>
+            🔒 Privacy Notice: This tool analyzes publicly available IP information only. No personal data is stored.
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <script>
+        class IPDetector {
+            constructor() {
+                this.ipData = null;
+                this.map = null;
+                this.threatDatabases = {
+                    adguard: { ips: new Set(), loaded: false, url: 'https://cors.sh/https://raw.githubusercontent.com/AdguardTeam/AdGuardSDNSFilter/master/Filters/filter.txt' },
+                    ublock: { ips: new Set(), loaded: false, url: 'https://cors.sh/https://raw.githubusercontent.com/uBlockOrigin/uAssets/master/filters/malware.txt' },
+                    ipsum: { ips: new Set(), loaded: false, url: 'https://cors.sh/https://raw.githubusercontent.com/stamparm/ipsum/master/ipsum.txt' }
+                };
+                this.init();
+            }
+
+            init() {
+                this.createMatrixBackground();
+                this.fetchIPData();
+                this.initMap();
+                this.loadThreatDatabases();
+                this.updateTimestamp();
+                setInterval(() => this.updateTimestamp(), 1000);
+            }
+
+            createMatrixBackground() {
+                const matrixBg = document.getElementById('matrixBg');
+                for (let i = 0; i < 50; i++) {
+                    const char = document.createElement('div');
+                    char.className = 'matrix-char';
+                    char.textContent = '01'.charAt(Math.random() * 2);
+                    char.style.left = Math.random() * 100 + '%';
+                    char.style.top = Math.random() * 100 + '%';
+                    char.style.animationDuration = (Math.random() * 10 + 5) + 's';
+                    char.style.animationDelay = Math.random() * 5 + 's';
+                    matrixBg.appendChild(char);
+                }
+            }
+
+            updateTimestamp() {
+                const now = new Date();
+                document.getElementById('timestamp').textContent = now.toLocaleTimeString();
+            }
+
+            async fetchIPData() {
+                try {
+                    const response = await fetch('https://ipapi.co/json/');
+                    if (!response.ok) throw new Error('Failed to fetch IP data');
+                    this.ipData = await response.json();
+                    this.displayIPInfo();
+                    this.displayLocationInfo();
+                    this.updateMap();
+                    this.analyzeAnomalies();
+                    await this.checkThreatDatabases();
+                } catch (error) {
+                    document.getElementById('ipInfo').innerHTML = `
+                        <div class="error-message">
+                            ⚠️ ERROR: ${error.message}<br>
+                            Please check your internet connection and refresh.
+                        </div>
+                    `;
+                    document.getElementById('locationInfo').innerHTML = `
+                        <div class="error-message">
+                            Unable to fetch location data
+                        </div>
+                    `;
+                    document.getElementById('anomalies').innerHTML = `
+                        <div class="error-message">
+                            Analysis unavailable
+                        </div>
+                    `;
+                }
+            }
+
+            displayIPInfo() {
+                const info = `
+                    <div class="info-item">
+                        <span class="label">IP ADDRESS:</span>
+                        <span class="value">${this.ipData.ip}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">ISP:</span>
+                        <span class="value">${this.ipData.org || 'Unknown'}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">ORGANIZATION:</span>
+                        <span class="value">${this.ipData.organization || this.ipData.org || 'Unknown'}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">NETWORK TYPE:</span>
+                        <span class="value">${this.classifyNetworkType()}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">COUNTRY:</span>
+                        <span class="value">${this.ipData.country_name} (${this.ipData.country})</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">TIMEZONE:</span>
+                        <span class="value">${this.ipData.timezone}</span>
+                    </div>
+                `;
+                document.getElementById('ipInfo').innerHTML = info;
+            }
+
+            displayLocationInfo() {
+                const threatStatus = this.calculateThreatLevel();
+                const threatClass = threatStatus.level === 'CRITICAL' ? 'danger' : threatStatus.level === 'WARNING' ? 'warning' : 'safe';
+
+                const info = `
+                    <div class="info-item">
+                        <span class="label">LATITUDE:</span>
+                        <span class="value">${this.ipData.latitude.toFixed(6)}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">LONGITUDE:</span>
+                        <span class="value">${this.ipData.longitude.toFixed(6)}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">CITY:</span>
+                        <span class="value">${this.ipData.city}, ${this.ipData.region}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">POSTAL CODE:</span>
+                        <span class="value">${this.ipData.postal}</span>
+                    </div>
+                    <div class="threat-level ${threatClass}">
+                        <span class="status-indicator status-${threatClass === 'danger' ? 'danger' : threatClass === 'warning' ? 'warning' : 'safe'}"></span>
+                        THREAT LEVEL: ${threatStatus.level}
+                    </div>
+                    <div class="scan-result">
+                        Status: ${threatStatus.message}
+                    </div>
+                `;
+                document.getElementById('locationInfo').innerHTML = info;
+            }
+
+            classifyNetworkType() {
+                const org = (this.ipData.org || '').toUpperCase();
+                const isDatacenter = /^(AMAZON|AWS|GOOGLE|MICROSOFT|AZURE|DIGITALOCEAN|LINODE|VULTR|OVH|HETZNER|CONTABO)/i.test(org);
+                const isMobileNetwork = /(MOBILE|CELLULAR|WIRELESS)/i.test(org);
+
+                if (isDatacenter) return '🖥️ DATACENTER/CLOUD';
+                if (isMobileNetwork) return '📱 MOBILE NETWORK';
+                return '🏠 RESIDENTIAL ISP';
+            }
+
+            calculateThreatLevel() {
+                const threats = [];
+                const org = (this.ipData.org || '').toUpperCase();
+
+                if (/^(AMAZON|AWS|GOOGLE|MICROSOFT|AZURE|DIGITALOCEAN|LINODE|VULTR)/i.test(org)) {
+                    threats.push('datacenter');
+                }
+
+                if (/BULLETPROOF|HOSTING|VPS|PROXY|ANONYMIZED|MAXMIND|TEAM CYMRU/i.test(org)) {
+                    threats.push('suspicious_provider');
+                }
+
+                const riskCountries = ['KP', 'IR', 'SY', 'CU', 'SD'];
+                if (riskCountries.includes(this.ipData.country)) {
+                    threats.push('high_risk_country');
+                }
+
+                if (this.ipData.asn && parseInt(this.ipData.asn) < 1000) {
+                    threats.push('legacy_asn');
+                }
+
+                // Check threat databases
+                if (this.isIPInThreatDatabase()) {
+                    threats.push('database_match');
+                }
+
+                if (threats.length >= 3) {
+                    return {
+                        level: 'CRITICAL',
+                        message: '🚨 CRITICAL: Multiple threat indicators detected. Network appears highly suspicious.'
+                    };
+                } else if (threats.length >= 2) {
+                    return {
+                        level: 'WARNING',
+                        message: '⚠️ Some anomalies detected. Exercise caution.'
+                    };
+                } else if (threats.length === 1) {
+                    return {
+                        level: 'CAUTION',
+                        message: '✓ Minor anomalies detected. Likely safe.'
+                    };
+                }
+                return {
+                    level: 'SAFE',
+                    message: '✓ IP appears normal. No significant threats detected.'
+                };
+            }
+
+            isIPInThreatDatabase() {
+                const ip = this.ipData.ip;
+                for (const db of Object.values(this.threatDatabases)) {
+                    if (db.ips.has(ip)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            async loadThreatDatabases() {
+                const statusDiv = document.getElementById('databaseStatus');
+                let html = '';
+
+                for (const [name, db] of Object.entries(this.threatDatabases)) {
+                    html += `<div class="database-item loading" id="db-${name}">
+                        <span class="db-status-indicator db-status-loading"></span>
+                        <span>${name.toUpperCase()}</span>: Loading...
+                    </div>`;
+                }
+                statusDiv.innerHTML = html;
+
+                for (const [name, db] of Object.entries(this.threatDatabases)) {
+                    await this.fetchThreatDatabase(name, db);
+                }
+            }
+
+            async fetchThreatDatabase(name, db) {
+                try {
+                    const response = await fetch(db.url, { timeout: 10000 });
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                    const text = await response.text();
+                    const lines = text.split('\n');
+                    let ipCount = 0;
+
+                    for (const line of lines) {
+                        const trimmed = line.trim();
+                        if (!trimmed || trimmed.startsWith('!') || trimmed.startsWith('#')) continue;
+
+                        const ip = trimmed.split(/[|\s]/)[0];
+                        if (this.isValidIP(ip)) {
+                            db.ips.add(ip);
+                            ipCount++;
+                        }
+                    }
+
+                    db.loaded = true;
+                    this.updateDatabaseStatus(name, true, ipCount);
+
+                    if (this.ipData) {
+                        await this.checkThreatDatabases();
+                    }
+                } catch (error) {
+                    this.updateDatabaseStatus(name, false, 0, error.message);
+                }
+            }
+
+            updateDatabaseStatus(name, success, count, error = null) {
+                const element = document.getElementById(`db-${name}`);
+                if (!element) return;
+
+                element.className = `database-item ${success ? 'loaded' : 'error'}`;
+                const status = success
+                    ? `<span class="db-status-indicator db-status-success"></span>LOADED (${count} IPs)`
+                    : `<span class="db-status-indicator db-status-error"></span>ERROR: ${error || 'Unknown'}`;
+
+                element.innerHTML = `${status} - ${name.toUpperCase()}`;
+            }
+
+            isValidIP(str) {
+                const ipv4 = /^(\d{1,3}\.){3}\d{1,3}$/.test(str);
+                const ipv6 = /^[0-9a-fA-F:]+$/.test(str);
+                return ipv4 || ipv6;
+            }
+
+            async checkThreatDatabases() {
+                if (!this.ipData) return;
+
+                const ip = this.ipData.ip;
+                let matchedDatabases = [];
+
+                for (const [name, db] of Object.entries(this.threatDatabases)) {
+                    if (db.ips.has(ip)) {
+                        matchedDatabases.push(name.toUpperCase());
+                    }
+                }
+
+                if (matchedDatabases.length > 0) {
+                    const warning = `
+                        <div class="critical-warning">
+                            <h3>🚨 CRITICAL THREAT DETECTED!</h3>
+                            <p>Your IP has been flagged in the following threat databases:</p>
+                            <ul style="margin-left: 20px; margin-top: 10px;">
+                                ${matchedDatabases.map(db => `<li>${db} Threat Database</li>`).join('')}
+                            </ul>
+                            <p style="margin-top: 10px; font-size: 0.9em;">⚠️ This IP is known to be associated with malicious activity or compromised systems.</p>
+                        </div>
+                    `;
+                    document.getElementById('criticalWarning').innerHTML = warning;
+                }
+            }
+
+            analyzeAnomalies() {
+                const anomalies = [];
+                const org = (this.ipData.org || '').toUpperCase();
+
+                if (/^(AMAZON|AWS|GOOGLE|MICROSOFT|AZURE|DIGITALOCEAN)/i.test(org)) {
+                    anomalies.push({
+                        type: 'warning',
+                        message: `Datacenter/Cloud IP detected (${this.ipData.org}). May indicate VPS, cloud services, or data center activity.`
+                    });
+                }
+
+                if (/BULLETPROOF|BULLETPROOF HOSTING/i.test(org)) {
+                    anomalies.push({
+                        type: 'danger',
+                        message: 'IP appears to be from a high-risk hosting provider. Known for malicious use.'
+                    });
+                }
+
+                const riskCountries = {
+                    'KP': 'North Korea - Severely restricted region',
+                    'IR': 'Iran - Restricted region',
+                    'SY': 'Syria - Active conflict region',
+                    'CU': 'Cuba - Trade embargoes',
+                    'SD': 'Sudan - Restricted region'
+                };
+
+                if (riskCountries[this.ipData.country]) {
+                    anomalies.push({
+                        type: 'danger',
+                        message: `Geographic Risk: ${riskCountries[this.ipData.country]}`
+                    });
+                }
+
+                if (/PROXY|VPN|ANONYMIZED|HIDE|MASKED/i.test(org)) {
+                    anomalies.push({
+                        type: 'warning',
+                        message: 'Potential proxy or anonymization service detected.'
+                    });
+                }
+
+                const html = anomalies.length > 0
+                    ? anomalies.map(a => `
+                        <div class="anomaly-item ${a.type === 'danger' ? '' : 'warning'}">
+                            <strong>${a.type === 'danger' ? '🚨' : '⚠️'} ${a.type.toUpperCase()}:</strong> ${a.message}
+                        </div>
+                    `).join('')
+                    : '<div style="color: #00aa00;">✓ No major anomalies detected. Network appears legitimate.</div>';
+
+                document.getElementById('anomalies').innerHTML = html;
+            }
+
+            initMap() {
+                const mapContainer = document.getElementById('map');
+                if (!mapContainer.parentElement.offsetWidth) {
+                    setTimeout(() => this.initMap(), 100);
+                    return;
+                }
+
+                this.map = L.map('map').setView([0, 0], 2);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors',
+                    maxZoom: 19
+                }).addTo(this.map);
+            }
+
+            updateMap() {
+                if (!this.map) return;
+
+                const lat = parseFloat(this.ipData.latitude);
+                const lng = parseFloat(this.ipData.longitude);
+
+                this.map.setView([lat, lng], 10);
+
+                const circleMarker = L.circleMarker([lat, lng], {
+                    radius: 15,
+                    fillColor: '#00ff00',
+                    color: '#00ff00',
+                    weight: 2,
+                    opacity: 0.8,
+                    fillOpacity: 0.3,
+                    className: 'ip-marker'
+                }).addTo(this.map);
+
+                circleMarker.bindPopup(`
+                    <div style="background: #0a0e27; color: #00ff00; font-family: monospace;">
+                        <strong>📍 ${this.ipData.city}, ${this.ipData.country_name}</strong><br>
+                        IP: ${this.ipData.ip}<br>
+                        ISP: ${this.ipData.org}
+                    </div>
+                `, { className: 'ip-popup' });
+            }
+        }
+
+        window.addEventListener('load', () => {
+            new IPDetector();
+        });
+    </script>
+
+    <style>
+        .ip-popup {
+            background: #0a0e27 !important;
+            border: 2px solid #00ff00 !important;
+        }
+
+        .ip-popup .leaflet-popup-content {
+            margin: 0 !important;
+            background: #0a0e27 !important;
+        }
+
+        .ip-marker {
+            animation: pulse 1.5s infinite;
+        }
+
+        .leaflet-popup-tip {
+            background-color: #0a0e27 !important;
+            border-top-color: #00ff00 !important;
+        }
+    </style>
+</body>
+</html>
