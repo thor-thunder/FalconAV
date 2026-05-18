@@ -11,6 +11,11 @@
     "github": {
       "transport": "http",
       "url": "https://mcp.github.com"
+    },
+    "coderabbit": {
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "coderabbitai-mcp@latest"]
     }
   }
 }
