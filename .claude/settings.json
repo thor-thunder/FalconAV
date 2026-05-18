@@ -16,6 +16,11 @@
       "transport": "stdio",
       "command": "npx",
       "args": ["-y", "coderabbitai-mcp@latest"]
+    },
+    "superpowers": {
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "superpowers-mcp@latest"]
     }
   }
 }
