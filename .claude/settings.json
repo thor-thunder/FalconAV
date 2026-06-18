@@ -1,0 +1,26 @@
+{
+  "mcpServers": {
+    "exa": {
+      "transport": "http",
+      "url": "https://mcp.exa.ai/mcp"
+    },
+    "context7": {
+      "transport": "http",
+      "url": "https://mcp.context7.com/mcp"
+    },
+    "github": {
+      "transport": "http",
+      "url": "https://mcp.github.com"
+    },
+    "coderabbit": {
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "coderabbitai-mcp@latest"]
+    },
+    "superpowers": {
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "superpowers-mcp@latest"]
+    }
+  }
+}
